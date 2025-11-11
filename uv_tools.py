@@ -778,10 +778,16 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
             for loop in face.loops:
                 # 检查是否是边界循环
                 is_boundary = False
+                # 通过检查边链接的面数量来判断是否是边界
                 for edge in face.edges:
-                    if loop in [edge.loops[0], edge.loops[1]] and len(edge.link_faces) == 1:
-                        is_boundary = True
-                        break
+                    if len(edge.link_faces) == 1:
+                        # 如果这条边只链接一个面，那么它是边界边
+                        # 检查循环是否属于这条边界边
+                        edge_verts = [edge.verts[0].index, edge.verts[1].index]
+                        loop_verts = [loop.vert.index, loop.link_loop_next.vert.index]
+                        if set(edge_verts) == set(loop_verts):
+                            is_boundary = True
+                            break
                 
                 if is_boundary:
                     boundary_loops.add(loop)
@@ -806,10 +812,16 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
             for loop in face.loops:
                 # 检查是否是边界循环
                 is_boundary = False
+                # 通过检查边链接的面数量来判断是否是边界
                 for edge in face.edges:
-                    if loop in [edge.loops[0], edge.loops[1]] and len(edge.link_faces) == 1:
-                        is_boundary = True
-                        break
+                    if len(edge.link_faces) == 1:
+                        # 如果这条边只链接一个面，那么它是边界边
+                        # 检查循环是否属于这条边界边
+                        edge_verts = [edge.verts[0].index, edge.verts[1].index]
+                        loop_verts = [loop.vert.index, loop.link_loop_next.vert.index]
+                        if set(edge_verts) == set(loop_verts):
+                            is_boundary = True
+                            break
                 
                 if is_boundary:
                     boundary_loops.add(loop)
