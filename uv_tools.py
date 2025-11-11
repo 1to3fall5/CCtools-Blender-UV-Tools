@@ -670,7 +670,9 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
     def relax_minimize_stretch(self, island, uv_layer):
         """使用Blender内置的minimize_stretch算法"""
         # 保存当前选择状态
-        selected_faces = [face for face in bpy.context.active_object.data.polygons if face.select]
+        obj = bpy.context.active_object
+        bm = bmesh.from_edit_mesh(obj.data)
+        selected_faces = [face for face in bm.faces if face.select]
         
         # 取消所有选择
         bpy.ops.mesh.select_all(action='DESELECT')
@@ -683,8 +685,7 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
         for i in range(self.relax_iterations):
             bpy.ops.uv.minimize_stretch(
                 fill_holes=True,
-                iterations=1,
-                margin=0.001
+                iterations=1
             )
         
         # 恢复原始选择状态
@@ -695,7 +696,9 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
     def relax_conformal(self, island, uv_layer):
         """使用CONFORMAL展开方法"""
         # 保存当前选择状态
-        selected_faces = [face for face in bpy.context.active_object.data.polygons if face.select]
+        obj = bpy.context.active_object
+        bm = bmesh.from_edit_mesh(obj.data)
+        selected_faces = [face for face in bm.faces if face.select]
         
         # 取消所有选择
         bpy.ops.mesh.select_all(action='DESELECT')
@@ -720,7 +723,9 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
     def relax_univ_hybrid(self, island, uv_layer):
         """UniV混合放松方法 - 结合minimize_stretch和CONFORMAL"""
         # 保存当前选择状态
-        selected_faces = [face for face in bpy.context.active_object.data.polygons if face.select]
+        obj = bpy.context.active_object
+        bm = bmesh.from_edit_mesh(obj.data)
+        selected_faces = [face for face in bm.faces if face.select]
         
         # 取消所有选择
         bpy.ops.mesh.select_all(action='DESELECT')
@@ -740,8 +745,7 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
             # 1. 应用minimize_stretch
             bpy.ops.uv.minimize_stretch(
                 fill_holes=True,
-                iterations=1,
-                margin=0.001
+                iterations=1
             )
             
             # 2. 应用CONFORMAL展开
