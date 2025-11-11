@@ -601,46 +601,6 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
                             neighbors.append((loop[uv_layer].uv.x, loop[uv_layer].uv.y))
         
         return neighbors
-    
-    def get_uv_neighbors(self, uv, all_uv_points, island, uv_layer):
-        """获取UV点的邻居"""
-        neighbors = []
-        threshold = 0.001  # 用于判断是否为同一点的阈值
-        
-        # 获取BMesh对象
-        bm = bmesh.from_edit_mesh(bpy.context.active_object.data)
-        uv_layer = bm.loops.layers.uv.active
-        
-        # 在岛中查找相邻的UV点
-        for face in island:
-            bm_face = None
-            for f in bm.faces:
-                if f.index == face.index:
-                    bm_face = f
-                    break
-            
-            if bm_face:
-                for loop in bm_face.loops:
-                    neighbor_uv = loop[uv_layer].uv
-                    
-                    # 如果是同一个点，跳过
-                    if (uv - neighbor_uv).length < threshold:
-                        continue
-                    
-                    # 检查是否是相邻点
-                    for other_loop in bm_face.loops:
-                        other_uv = other_loop[uv_layer].uv
-                        
-                        # 如果是同一个点，跳过
-                        if (uv - other_uv).length < threshold:
-                            continue
-                        
-                        # 如果是相邻点，添加到邻居列表
-                        if (neighbor_uv - other_uv).length < threshold:
-                            if neighbor_uv not in neighbors:
-                                neighbors.append(neighbor_uv)
-        
-        return neighbors
 
 
 # UV工具面板
