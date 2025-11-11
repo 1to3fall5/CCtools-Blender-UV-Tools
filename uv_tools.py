@@ -429,14 +429,10 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
         name="放松模式",
         description="选择放松UV的方式",
         items=[
-            ('EDGE_LENGTH', "边长度", "基于边长度的放松"),
-            ('ANGLE', "角度", "基于角度的放松"),
-            ('AREA', "面积", "基于面积的放松"),
-            ('MINIMIZE_STRETCH', "最小化拉伸", "使用Blender内置的最小化拉伸算法"),
             ('CONFORMAL', "保角映射", "使用保角映射方法放松UV"),
             ('UNIV_HYBRID', "UniV混合", "使用UniV的混合放松方法(最小化拉伸+保角映射+边界混合)")
         ],
-        default='EDGE_LENGTH'
+        default='CONFORMAL'
     )
     
     def execute(self, context):
@@ -525,173 +521,10 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
     def relax_island(self, island, uv_layer):
         """放松单个UV岛"""
         # 根据模式选择放松算法
-        if self.relax_mode == 'EDGE_LENGTH':
-            self.relax_edge_length(island, uv_layer)
-        elif self.relax_mode == 'ANGLE':
-            self.relax_angle(island, uv_layer)
-        elif self.relax_mode == 'AREA':
-            self.relax_area(island, uv_layer)
-        elif self.relax_mode == 'MINIMIZE_STRETCH':
-            self.relax_minimize_stretch(island, uv_layer)
-        elif self.relax_mode == 'CONFORMAL':
+        if self.relax_mode == 'CONFORMAL':
             self.relax_conformal(island, uv_layer)
         elif self.relax_mode == 'UNIV_HYBRID':
             self.relax_univ_hybrid(island, uv_layer)
-    
-    def relax_edge_length(self, island, uv_layer):
-        """基于边长度的放松算法 - 保持UV岛整体性"""
-        for iteration in range(self.relax_iterations):
-            # 收集岛中所有UV点
-            island_uvs = []
-            for face in island:
-                for loop in face.loops:
-                    island_uvs.append(loop[uv_layer].uv)
-            
-            # 计算UV岛的中心点
-            center_x = sum(uv.x for uv in island_uvs) / len(island_uvs)
-            center_y = sum(uv.y for uv in island_uvs) / len(island_uvs)
-            center = mathutils.Vector((center_x, center_y))
-            
-            # 计算每个UV点到中心的平均距离
-            avg_distance = sum((uv - center).length for uv in island_uvs) / len(island_uvs)
-            
-            # 对每个UV点应用放松，但保持相对位置
-            for face in island:
-                for loop in face.loops:
-                    uv = loop[uv_layer].uv
-                    direction = uv - center
-                    
-                    if direction.length > 0:
-                        # 归一化方向并应用放松
-                        direction.normalize()
-                        new_distance = uv.length + (avg_distance - uv.length) * self.relax_strength
-                        new_pos = center + direction * new_distance
-                        
-                        # 更新UV位置
-                        loop[uv_layer].uv.x = new_pos.x
-                        loop[uv_layer].uv.y = new_pos.y
-    
-    def relax_angle(self, island, uv_layer):
-        """基于角度的放松算法 - 保持UV岛整体性"""
-        for iteration in range(self.relax_iterations):
-            # 收集岛中所有UV点
-            island_uvs = []
-            for face in island:
-                for loop in face.loops:
-                    island_uvs.append(loop[uv_layer].uv)
-            
-            # 计算UV岛的中心点
-            center_x = sum(uv.x for uv in island_uvs) / len(island_uvs)
-            center_y = sum(uv.y for uv in island_uvs) / len(island_uvs)
-            center = mathutils.Vector((center_x, center_y))
-            
-            # 计算每个UV点的角度和距离
-            uv_data = []
-            for uv in island_uvs:
-                direction = uv - center
-                if direction.length > 0:
-                    angle = math.atan2(direction.y, direction.x)
-                    distance = direction.length
-                    uv_data.append((uv, angle, distance))
-            
-            # 计算平均角度变化
-            if len(uv_data) > 1:
-                angles = [data[1] for data in uv_data]
-                avg_angle = sum(angles) / len(angles)
-                
-                # 对每个UV点应用角度放松
-                for face in island:
-                    for loop in face.loops:
-                        uv = loop[uv_layer].uv
-                        direction = uv - center
-                        
-                        if direction.length > 0:
-                            current_angle = math.atan2(direction.y, direction.x)
-                            new_angle = current_angle + (avg_angle - current_angle) * self.relax_strength * 0.7
-                            
-                            # 保持距离不变，只改变角度
-                            new_pos = center + mathutils.Vector((
-                                direction.length * math.cos(new_angle),
-                                direction.length * math.sin(new_angle)
-                            ))
-                            
-                            # 更新UV位置
-                            loop[uv_layer].uv.x = new_pos.x
-                            loop[uv_layer].uv.y = new_pos.y
-    
-    def relax_area(self, island, uv_layer):
-        """基于面积的放松算法 - 保持UV岛整体性"""
-        for iteration in range(self.relax_iterations):
-            # 收集岛中所有UV点
-            island_uvs = []
-            for face in island:
-                for loop in face.loops:
-                    island_uvs.append(loop[uv_layer].uv)
-            
-            # 计算UV岛的中心点
-            center_x = sum(uv.x for uv in island_uvs) / len(island_uvs)
-            center_y = sum(uv.y for uv in island_uvs) / len(island_uvs)
-            center = mathutils.Vector((center_x, center_y))
-            
-            # 计算UV岛的当前面积（使用凸包近似）
-            if len(island_uvs) < 3:
-                continue  # 需要至少3个点才能形成面积
-                
-            # 计算当前面积
-            current_area = 0
-            for i in range(len(island_uvs)):
-                j = (i + 1) % len(island_uvs)
-                current_area += island_uvs[i].x * island_uvs[j].y
-                current_area -= island_uvs[j].x * island_uvs[i].y
-            current_area = abs(current_area) / 2
-            
-            # 计算目标面积（基于平均距离）
-            avg_distance = sum((uv - center).length for uv in island_uvs) / len(island_uvs)
-            target_area = math.pi * avg_distance * avg_distance  # 使用圆形面积作为参考
-            
-            # 计算缩放因子
-            if current_area > 0:
-                scale_factor = 1 + (target_area - current_area) / current_area * self.relax_strength * 0.5
-                scale_factor = max(0.1, min(3.0, scale_factor))  # 限制缩放范围
-                
-                # 对每个UV点应用缩放
-                for face in island:
-                    for loop in face.loops:
-                        uv = loop[uv_layer].uv
-                        direction = uv - center
-                        
-                        # 缩放方向向量
-                        new_pos = center + direction * scale_factor
-                        
-                        # 更新UV位置
-                        loop[uv_layer].uv.x = new_pos.x
-                        loop[uv_layer].uv.y = new_pos.y
-    
-    def relax_minimize_stretch(self, island, uv_layer):
-        """使用Blender内置的minimize_stretch算法"""
-        # 保存当前选择状态
-        obj = bpy.context.active_object
-        bm = bmesh.from_edit_mesh(obj.data)
-        selected_faces = [face for face in bm.faces if face.select]
-        
-        # 取消所有选择
-        bpy.ops.mesh.select_all(action='DESELECT')
-        
-        # 选择当前UV岛的面
-        for face in island:
-            face.select = True
-        
-        # 应用minimize_stretch操作
-        for i in range(self.relax_iterations):
-            bpy.ops.uv.minimize_stretch(
-                fill_holes=True,
-                iterations=1
-            )
-        
-        # 恢复原始选择状态
-        bpy.ops.mesh.select_all(action='DESELECT')
-        for face in selected_faces:
-            face.select = True
     
     def relax_conformal(self, island, uv_layer):
         """使用CONFORMAL展开方法"""
@@ -1028,14 +861,10 @@ def register():
         name="UV放松模式",
         description="选择放松UV的方式",
         items=[
-            ('EDGE_LENGTH', "边长度", "基于边长度的放松"),
-            ('ANGLE', "角度", "基于角度的放松"),
-            ('AREA', "面积", "基于面积的放松"),
-            ('MINIMIZE_STRETCH', "最小化拉伸", "使用Blender内置的最小化拉伸算法"),
             ('CONFORMAL', "保角映射", "使用CONFORMAL展开方法"),
             ('UNIV_HYBRID', "UniV混合", "UniV混合放松方法")
         ],
-        default='EDGE_LENGTH'
+        default='CONFORMAL'
     )
     
     bpy.types.Scene.uv_relax_strength = bpy.props.FloatProperty(
