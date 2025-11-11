@@ -1,5 +1,7 @@
 import bpy
 import bmesh
+import math
+import mathutils
 from mathutils import Vector
 
 # 统一UV岛尺寸的基础操作符
@@ -511,69 +513,133 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
             self.relax_area(island, uv_layer)
     
     def relax_edge_length(self, island, uv_layer):
-        """基于边长度的放松算法"""
+        """基于边长度的放松算法 - 保持UV岛整体性"""
         for iteration in range(self.relax_iterations):
-            # 计算每个UV点的新位置
-            new_positions = {}
+            # 收集岛中所有UV点
+            island_uvs = []
+            for face in island:
+                for loop in face.loops:
+                    island_uvs.append(loop[uv_layer].uv)
             
+            # 计算UV岛的中心点
+            center_x = sum(uv.x for uv in island_uvs) / len(island_uvs)
+            center_y = sum(uv.y for uv in island_uvs) / len(island_uvs)
+            center = mathutils.Vector((center_x, center_y))
+            
+            # 计算每个UV点到中心的平均距离
+            avg_distance = sum((uv - center).length for uv in island_uvs) / len(island_uvs)
+            
+            # 对每个UV点应用放松，但保持相对位置
             for face in island:
                 for loop in face.loops:
                     uv = loop[uv_layer].uv
-                    neighbors = self.get_uv_neighbors(face, uv_layer, loop)
+                    direction = uv - center
                     
-                    if neighbors:
-                        # 计算邻居的平均位置
-                        avg_x = sum(n[0] for n in neighbors) / len(neighbors)
-                        avg_y = sum(n[1] for n in neighbors) / len(neighbors)
+                    if direction.length > 0:
+                        # 归一化方向并应用放松
+                        direction.normalize()
+                        new_distance = uv.length + (avg_distance - uv.length) * self.relax_strength
+                        new_pos = center + direction * new_distance
                         
-                        # 应用强度
-                        new_x = uv.x + (avg_x - uv.x) * self.relax_strength
-                        new_y = uv.y + (avg_y - uv.y) * self.relax_strength
-                        
-                        new_positions[(face.index, loop.index)] = (new_x, new_y)
-            
-            # 更新UV位置
-            for face in island:
-                for loop in face.loops:
-                    key = (face.index, loop.index)
-                    if key in new_positions:
-                        loop[uv_layer].uv.x, loop[uv_layer].uv.y = new_positions[key]
+                        # 更新UV位置
+                        loop[uv_layer].uv.x = new_pos.x
+                        loop[uv_layer].uv.y = new_pos.y
     
     def relax_angle(self, island, uv_layer):
-        """基于角度的放松算法"""
-        # 简化的角度基础算法
+        """基于角度的放松算法 - 保持UV岛整体性"""
         for iteration in range(self.relax_iterations):
+            # 收集岛中所有UV点
+            island_uvs = []
             for face in island:
                 for loop in face.loops:
-                    uv = loop[uv_layer].uv
-                    neighbors = self.get_uv_neighbors(face, uv_layer, loop)
-                    
-                    if neighbors:
-                        # 角度基础算法考虑UV边的角度
-                        avg_x = sum(n[0] for n in neighbors) / len(neighbors)
-                        avg_y = sum(n[1] for n in neighbors) / len(neighbors)
+                    island_uvs.append(loop[uv_layer].uv)
+            
+            # 计算UV岛的中心点
+            center_x = sum(uv.x for uv in island_uvs) / len(island_uvs)
+            center_y = sum(uv.y for uv in island_uvs) / len(island_uvs)
+            center = mathutils.Vector((center_x, center_y))
+            
+            # 计算每个UV点的角度和距离
+            uv_data = []
+            for uv in island_uvs:
+                direction = uv - center
+                if direction.length > 0:
+                    angle = math.atan2(direction.y, direction.x)
+                    distance = direction.length
+                    uv_data.append((uv, angle, distance))
+            
+            # 计算平均角度变化
+            if len(uv_data) > 1:
+                angles = [data[1] for data in uv_data]
+                avg_angle = sum(angles) / len(angles)
+                
+                # 对每个UV点应用角度放松
+                for face in island:
+                    for loop in face.loops:
+                        uv = loop[uv_layer].uv
+                        direction = uv - center
                         
-                        # 应用强度
-                        loop[uv_layer].uv.x = uv.x + (avg_x - uv.x) * self.relax_strength * 0.7
-                        loop[uv_layer].uv.y = uv.y + (avg_y - uv.y) * self.relax_strength * 0.7
+                        if direction.length > 0:
+                            current_angle = math.atan2(direction.y, direction.x)
+                            new_angle = current_angle + (avg_angle - current_angle) * self.relax_strength * 0.7
+                            
+                            # 保持距离不变，只改变角度
+                            new_pos = center + mathutils.Vector((
+                                direction.length * math.cos(new_angle),
+                                direction.length * math.sin(new_angle)
+                            ))
+                            
+                            # 更新UV位置
+                            loop[uv_layer].uv.x = new_pos.x
+                            loop[uv_layer].uv.y = new_pos.y
     
     def relax_area(self, island, uv_layer):
-        """基于面积的放松算法"""
-        # 简化的面积基础算法
+        """基于面积的放松算法 - 保持UV岛整体性"""
         for iteration in range(self.relax_iterations):
+            # 收集岛中所有UV点
+            island_uvs = []
             for face in island:
                 for loop in face.loops:
-                    uv = loop[uv_layer].uv
-                    neighbors = self.get_uv_neighbors(face, uv_layer, loop)
-                    
-                    if neighbors:
-                        # 面积基础算法考虑UV面积
-                        avg_x = sum(n[0] for n in neighbors) / len(neighbors)
-                        avg_y = sum(n[1] for n in neighbors) / len(neighbors)
+                    island_uvs.append(loop[uv_layer].uv)
+            
+            # 计算UV岛的中心点
+            center_x = sum(uv.x for uv in island_uvs) / len(island_uvs)
+            center_y = sum(uv.y for uv in island_uvs) / len(island_uvs)
+            center = mathutils.Vector((center_x, center_y))
+            
+            # 计算UV岛的当前面积（使用凸包近似）
+            if len(island_uvs) < 3:
+                continue  # 需要至少3个点才能形成面积
+                
+            # 计算当前面积
+            current_area = 0
+            for i in range(len(island_uvs)):
+                j = (i + 1) % len(island_uvs)
+                current_area += island_uvs[i].x * island_uvs[j].y
+                current_area -= island_uvs[j].x * island_uvs[i].y
+            current_area = abs(current_area) / 2
+            
+            # 计算目标面积（基于平均距离）
+            avg_distance = sum((uv - center).length for uv in island_uvs) / len(island_uvs)
+            target_area = math.pi * avg_distance * avg_distance  # 使用圆形面积作为参考
+            
+            # 计算缩放因子
+            if current_area > 0:
+                scale_factor = 1 + (target_area - current_area) / current_area * self.relax_strength * 0.5
+                scale_factor = max(0.1, min(3.0, scale_factor))  # 限制缩放范围
+                
+                # 对每个UV点应用缩放
+                for face in island:
+                    for loop in face.loops:
+                        uv = loop[uv_layer].uv
+                        direction = uv - center
                         
-                        # 应用强度
-                        loop[uv_layer].uv.x = uv.x + (avg_x - uv.x) * self.relax_strength * 0.5
-                        loop[uv_layer].uv.y = uv.y + (avg_y - uv.y) * self.relax_strength * 0.5
+                        # 缩放方向向量
+                        new_pos = center + direction * scale_factor
+                        
+                        # 更新UV位置
+                        loop[uv_layer].uv.x = new_pos.x
+                        loop[uv_layer].uv.y = new_pos.y
     
     def get_uv_neighbors(self, face, uv_layer, current_loop):
         """获取UV邻居点"""
