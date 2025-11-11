@@ -2,7 +2,7 @@
 bl_info = {
     "name": "Ctools",
     "author": "Your Name",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),  # 更新版本号
     "blender": (4, 5, 0),
     "location": "Image Editor > Sidebar > Ctools UV",
     "description": "统一UV岛尺寸工具集",
@@ -16,14 +16,29 @@ import bpy
 # 导入各个模块
 from . import uv_tools
 
+# 尝试导入新功能模块（可选）
+try:
+    from . import example_new_feature
+    NEW_FEATURE_AVAILABLE = True
+except ImportError:
+    NEW_FEATURE_AVAILABLE = False
+
 # 注册和注销函数
 def register():
-    # 注册各个模块
+    # 注册核心模块
     uv_tools.register()
+    
+    # 注册新功能模块（如果可用）
+    if NEW_FEATURE_AVAILABLE:
+        example_new_feature.register()
 
 def unregister():
-    # 注销各个模块
+    # 注销核心模块
     uv_tools.unregister()
+    
+    # 注销新功能模块（如果可用）
+    if NEW_FEATURE_AVAILABLE:
+        example_new_feature.unregister()
 
 # 当作为脚本直接运行时
 def main():
