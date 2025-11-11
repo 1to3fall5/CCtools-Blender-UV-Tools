@@ -407,30 +407,12 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
         max=20
     )
     
-    # 边界混合参数(用于UniV混合方法)
-    border_blend: bpy.props.FloatProperty(
-        name="边界混合",
-        description="边界混合强度，控制边界区域保持原始位置的程度",
-        default=0.1,
-        min=0.0,
-        max=1.0,
-        precision=2
-    )
-    
-    # 使用固定点(用于UniV混合方法)
-    use_pins: bpy.props.BoolProperty(
-        name="使用固定点",
-        description="在放松过程中固定边界点，只放松内部区域",
-        default=True
-    )
-    
     # 放松模式
     relax_mode: bpy.props.EnumProperty(
         name="放松模式",
         description="选择放松UV的方式",
         items=[
-            ('CONFORMAL', "保角映射", "使用保角映射方法放松UV"),
-            ('UNIV_HYBRID', "UniV混合", "使用UniV的混合放松方法(最小化拉伸+保角映射+边界混合)")
+            ('CONFORMAL', "保角映射", "使用保角映射方法放松UV")
         ],
         default='CONFORMAL'
     )
@@ -520,11 +502,8 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
     
     def relax_island(self, island, uv_layer):
         """放松单个UV岛"""
-        # 根据模式选择放松算法
-        if self.relax_mode == 'CONFORMAL':
-            self.relax_conformal(island, uv_layer)
-        elif self.relax_mode == 'UNIV_HYBRID':
-            self.relax_univ_hybrid(island, uv_layer)
+        # 使用CONFORMAL放松算法
+        self.relax_conformal(island, uv_layer)
     
     def relax_conformal(self, island, uv_layer):
         """使用CONFORMAL展开方法"""
@@ -553,144 +532,6 @@ class UV_OT_RelaxIslands(bpy.types.Operator):
         for face in selected_faces:
             face.select = True
     
-    def relax_univ_hybrid(self, island, uv_layer):
-        """UniV混合放松方法 - 结合minimize_stretch和CONFORMAL"""
-        # 保存当前选择状态
-        obj = bpy.context.active_object
-        bm = bmesh.from_edit_mesh(obj.data)
-        selected_faces = [face for face in bm.faces if face.select]
-        
-        # 取消所有选择
-        bpy.ops.mesh.select_all(action='DESELECT')
-        
-        # 选择当前UV岛的面
-        for face in island:
-            face.select = True
-        
-        # 保存原始UV坐标
-        original_uvs = {}
-        for face in island:
-            for loop in face.loops:
-                original_uvs[loop.index] = loop[uv_layer].uv.copy()
-        
-        # 应用混合放松算法
-        for i in range(self.relax_iterations):
-            # 1. 应用minimize_stretch
-            bpy.ops.uv.minimize_stretch(
-                fill_holes=True,
-                iterations=1
-            )
-            
-            # 2. 应用CONFORMAL展开
-            bpy.ops.uv.unwrap(
-                method='CONFORMAL',
-                margin=0.001,
-                fill_holes=True
-            )
-            
-            # 3. 应用边界混合
-            if self.border_blend > 0:
-                self.apply_border_blend(island, uv_layer, original_uvs)
-            
-            # 4. 如果启用固定点，恢复边界点
-            if self.use_pins:
-                self.restore_boundary_pins(island, uv_layer, original_uvs)
-        
-        # 恢复原始选择状态
-        bpy.ops.mesh.select_all(action='DESELECT')
-        for face in selected_faces:
-            face.select = True
-    
-    def apply_border_blend(self, island, uv_layer, original_uvs):
-        """应用边界混合效果"""
-        # 识别边界UV点
-        boundary_loops = set()
-        interior_loops = set()
-        
-        for face in island:
-            for loop in face.loops:
-                # 检查是否是边界循环
-                is_boundary = False
-                # 通过检查边链接的面数量来判断是否是边界
-                for edge in face.edges:
-                    if len(edge.link_faces) == 1:
-                        # 如果这条边只链接一个面，那么它是边界边
-                        # 检查循环是否属于这条边界边
-                        edge_verts = [edge.verts[0].index, edge.verts[1].index]
-                        loop_verts = [loop.vert.index, loop.link_loop_next.vert.index]
-                        if set(edge_verts) == set(loop_verts):
-                            is_boundary = True
-                            break
-                
-                if is_boundary:
-                    boundary_loops.add(loop)
-                else:
-                    interior_loops.add(loop)
-        
-        # 对边界UV点应用混合
-        for loop in boundary_loops:
-            if loop.index in original_uvs:
-                original_uv = original_uvs[loop.index]
-                current_uv = loop[uv_layer].uv
-                
-                # 线性插回原始位置
-                loop[uv_layer].uv = current_uv.lerp(original_uv, self.border_blend)
-    
-    def restore_boundary_pins(self, island, uv_layer, original_uvs):
-        """恢复边界点（固定点）"""
-        # 识别边界UV点
-        boundary_loops = set()
-        
-        for face in island:
-            for loop in face.loops:
-                # 检查是否是边界循环
-                is_boundary = False
-                # 通过检查边链接的面数量来判断是否是边界
-                for edge in face.edges:
-                    if len(edge.link_faces) == 1:
-                        # 如果这条边只链接一个面，那么它是边界边
-                        # 检查循环是否属于这条边界边
-                        edge_verts = [edge.verts[0].index, edge.verts[1].index]
-                        loop_verts = [loop.vert.index, loop.link_loop_next.vert.index]
-                        if set(edge_verts) == set(loop_verts):
-                            is_boundary = True
-                            break
-                
-                if is_boundary:
-                    boundary_loops.add(loop)
-        
-        # 恢复边界UV点到原始位置
-        for loop in boundary_loops:
-            if loop.index in original_uvs:
-                loop[uv_layer].uv = original_uvs[loop.index]
-    
-    def get_uv_neighbors(self, face, uv_layer, current_loop):
-        """获取UV邻居点"""
-        neighbors = []
-        
-        # 获取当前循环的UV坐标
-        current_uv = current_loop[uv_layer].uv
-        
-        # 遍历面的所有循环
-        for loop in face.loops:
-            if loop != current_loop:
-                # 检查UV坐标是否相同（避免重复）
-                if (loop[uv_layer].uv.x != current_uv.x or 
-                    loop[uv_layer].uv.y != current_uv.y):
-                    neighbors.append((loop[uv_layer].uv.x, loop[uv_layer].uv.y))
-        
-        # 检查相邻面
-        for edge in face.edges:
-            for linked_face in edge.link_faces:
-                if linked_face != face:
-                    for loop in linked_face.loops:
-                        # 检查UV坐标是否相同（避免重复）
-                        if (loop[uv_layer].uv.x != current_uv.x or 
-                            loop[uv_layer].uv.y != current_uv.y):
-                            neighbors.append((loop[uv_layer].uv.x, loop[uv_layer].uv.y))
-        
-        return neighbors
-
 
 # UV工具面板
 class UV_PT_UnifyIslandsPanel(bpy.types.Panel):
@@ -746,24 +587,11 @@ class UV_PT_RelaxIslandsPanel(bpy.types.Panel):
         # 迭代次数滑块
         box.prop(context.scene, "uv_relax_iterations", text="迭代次数")
         
-        # 根据选择的模式显示额外参数
-        if context.scene.uv_relax_mode in ['UNIV_HYBRID']:
-            # 边界混合参数
-            box.prop(context.scene, "uv_border_blend", text="边界混合")
-            
-            # 使用固定点选项
-            box.prop(context.scene, "uv_use_pins", text="使用固定点")
-        
         # 放松按钮
         op = box.operator(UV_OT_RelaxIslands.bl_idname, text="放松UV岛")
         op.relax_mode = context.scene.uv_relax_mode
         op.relax_strength = context.scene.uv_relax_strength
         op.relax_iterations = context.scene.uv_relax_iterations
-        
-        # 传递额外参数
-        if context.scene.uv_relax_mode in ['UNIV_HYBRID']:
-            op.border_blend = context.scene.uv_border_blend
-            op.use_pins = context.scene.uv_use_pins
 
 
 # UV工具集合面板
@@ -809,24 +637,11 @@ class UV_PT_UVToolsCollection(bpy.types.Panel):
         # 迭代次数滑块
         box.prop(context.scene, "uv_relax_iterations", text="迭代次数")
         
-        # 根据选择的模式显示额外参数
-        if context.scene.uv_relax_mode in ['UNIV_HYBRID']:
-            # 边界混合参数
-            box.prop(context.scene, "uv_border_blend", text="边界混合")
-            
-            # 使用固定点选项
-            box.prop(context.scene, "uv_use_pins", text="使用固定点")
-        
         # 放松按钮
         op = box.operator(UV_OT_RelaxIslands.bl_idname, text="放松UV岛")
         op.relax_mode = context.scene.uv_relax_mode
         op.relax_strength = context.scene.uv_relax_strength
         op.relax_iterations = context.scene.uv_relax_iterations
-        
-        # 传递额外参数
-        if context.scene.uv_relax_mode in ['UNIV_HYBRID']:
-            op.border_blend = context.scene.uv_border_blend
-            op.use_pins = context.scene.uv_use_pins
 
 
 # 注册和注销函数
@@ -861,8 +676,7 @@ def register():
         name="UV放松模式",
         description="选择放松UV的方式",
         items=[
-            ('CONFORMAL', "保角映射", "使用CONFORMAL展开方法"),
-            ('UNIV_HYBRID', "UniV混合", "UniV混合放松方法")
+            ('CONFORMAL', "保角映射", "使用CONFORMAL展开方法")
         ],
         default='CONFORMAL'
     )
