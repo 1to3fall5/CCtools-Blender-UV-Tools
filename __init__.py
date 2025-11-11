@@ -2,7 +2,7 @@
 bl_info = {
     "name": "Ctools",
     "author": "Your Name",
-    "version": (1, 2, 0),  # 更新版本号
+    "version": (1, 3, 0),  # 更新版本号
     "blender": (4, 5, 0),
     "location": "Image Editor > Sidebar > Ctools UV",
     "description": "UV编辑工具集，包括统一尺寸和放松UV岛功能",
