@@ -23,7 +23,7 @@ class UV_OT_MoveIslands(bpy.types.Operator):
         description="UV岛移动的单位距离",
         default=0.1,
         min=0.001,
-        max=1.0,
+        max=10.0,
         precision=3
     )
     
@@ -124,7 +124,7 @@ def register():
         description="UV岛移动的单位距离",
         default=0.1,
         min=0.001,
-        max=1.0,
+        max=10.0,
         precision=3
     )
     
