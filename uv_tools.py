@@ -17,16 +17,16 @@ def register():
     uv_unify_islands.register()
     uv_relax_islands.register()
     uv_panels.register()
-    uv_utils.register()
+    # uv_utils模块只包含工具函数，不需要注册
 
 
 # 注销函数
 def unregister():
     # 注销所有模块（与注册顺序相反）
-    uv_utils.unregister()
     uv_panels.unregister()
     uv_relax_islands.unregister()
     uv_unify_islands.unregister()
+    # uv_utils模块只包含工具函数，不需要注销
 
 
 # 添加到blender的插件信息中
